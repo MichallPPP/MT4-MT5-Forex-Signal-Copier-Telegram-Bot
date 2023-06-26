@@ -3,6 +3,7 @@ import asyncio
 import logging
 import math
 import os
+import re
 
 try:
     from typing import Literal
@@ -61,22 +62,22 @@ def ParseSignal(signal: str) -> dict:
     trade = {}
 
     # determines the order type of the trade
-    if('Buy Limit'.lower() in signal[0].lower()):
+    if 'buy limit' in signal[0].lower():
         trade['OrderType'] = 'Buy Limit'
 
-    elif('Sell Limit'.lower() in signal[0].lower()):
+    elif 'sell limit' in signal[0].lower():
         trade['OrderType'] = 'Sell Limit'
 
-    elif('Buy Stop'.lower() in signal[0].lower()):
+    elif 'buy stop' in signal[0].lower():
         trade['OrderType'] = 'Buy Stop'
 
-    elif('Sell Stop'.lower() in signal[0].lower()):
+    elif 'sell stop' in signal[0].lower():
         trade['OrderType'] = 'Sell Stop'
 
-    elif('Buy'.lower() in signal[0].lower()):
+    elif 'buy' in signal[0].lower():
         trade['OrderType'] = 'Buy'
     
-    elif('Sell'.lower() in signal[0].lower()):
+    elif 'sell' in signal[0].lower():
         trade['OrderType'] = 'Sell'
     
     # returns an empty dictionary if an invalid order type was given
@@ -84,26 +85,22 @@ def ParseSignal(signal: str) -> dict:
         return {}
 
     # extracts symbol from trade signal
-    trade['Symbol'] = (signal[0].split())[-1].upper()
-    
+    trade['Symbol'] = re.findall(r'[A-Z]{3,6}', signal[0])[0]
+
     # checks if the symbol is valid, if not, returns an empty dictionary
-    if(trade['Symbol'] not in SYMBOLS):
+    if trade['Symbol'] not in SYMBOLS:
         return {}
     
-    # checks wheter or not to convert entry to float because of market exectution option ("NOW")
-    if(trade['OrderType'] == 'Buy' or trade['OrderType'] == 'Sell'):
-        trade['Entry'] = (signal[1].split())[-1]
+    # checks whether or not to convert entry to float because of market execution option ("NOW")
+    entry_line = [line for line in signal if "@" in line][0]
+    trade['Entry'] = float(re.findall(r'\d+\.\d+', entry_line)[0])
     
-    else:
-        trade['Entry'] = float((signal[1].split())[-1])
-    
-    trade['StopLoss'] = float((signal[2].split())[-1])
-    trade['TP'] = [float((signal[3].split())[-1])]
+    SL_line = [line for line in signal if "SL" in line.upper()][0]
+    trade['StopLoss'] = float(re.findall(r'\d+\.\d+', SL_line)[0])
 
-    # checks if there's a fourth line and parses it for TP2
-    if(len(signal) > 4):
-        trade['TP'].append(float(signal[4].split()[-1]))
-    
+    TP_lines = [line for line in signal if "TP" in line.upper()]
+    trade['TP'] = [float(re.findall(r'\d+\.\d+', line)[0]) for line in TP_lines]
+
     # adds risk factor to trade
     trade['RiskFactor'] = RISK_FACTOR
 
@@ -149,6 +146,8 @@ def GetTradeInformation(update: Update, trade: dict, balance: float) -> None:
     update.effective_message.reply_text(f'<pre>{table}</pre>', parse_mode=ParseMode.HTML)
 
     return
+
+
 
 def CreateTable(trade: dict, balance: float, stopLossPips: int, takeProfitPips: int) -> PrettyTable:
     """Creates PrettyTable object to display trade information to user.
